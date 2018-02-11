@@ -1,0 +1,16 @@
+= repostats
+
+Generate this with
+    repostats rdoc
+
+repostats is a custom-made command which fetches data related with VCS repositories, parses them and performs statistical calculations. It also displays these aggregated results grouped by the option given as argument
+
+repostats [global options] command [command options] [arguments...]
+
+Installation:
+
+-	Run gem install repostats-0.0.1.gem
+-	repostats command has been created and can be used
+
+
+More information in 'repostats_documentation.pdf'

@@ -1,0 +1,180 @@
+#!/usr/bin/env ruby
+require 'gli'
+# begin # XXX: Remove this begin/rescue before distributing your app
+require 'repostats'
+# rescue LoadError
+#   STDERR.puts "In development, you need to use `bundle exec bin/repostats` to run your app"
+#   STDERR.puts "At install-time, RubyGems will make sure lib, etc. are in the load path"
+#   STDERR.puts "Feel free to remove this message from bin/repostats now"
+#   exit 64
+# end
+
+include GLI::App
+
+program_desc 'Command Line Tool'
+
+version Repostats::VERSION
+
+subcommand_option_handling :normal
+arguments :strict
+
+desc 'Display result in console'
+switch [:c,:cons]
+
+desc 'VCS user token'
+arg_name 'generate token'
+flag [:t,:token]
+
+desc 'Organization name'
+arg_name 'organization name'
+flag [:o,:org], :required => true
+
+desc 'Output file name'
+arg_name 'file name'
+flag [:f,:filename]
+
+desc 'VCS host name'
+arg_name 'vcs name'
+default_value 'github'
+flag [:vcs]
+
+desc 'Calculate bytes per language divided by the total repos bytes'
+command :langBytesPerc do |c|
+  c.desc 'Output file name'
+  c.arg_name 'file_name'
+  c.flag [:f,:filename]
+
+  c.action do |global_options,options,args|
+    RepoLogger.writelog('info', "Calculate langBytesPerc method")
+    @execacl_class.langBytesPerc
+  end
+end
+
+desc 'Calculate the average amount of bytes divided by #repos'
+command :avgPerRepo do |c|
+  c.desc 'Output file name'
+  c.arg_name 'file_name'
+  c.flag [:f,:filename]
+
+  c.action do |global_options,options,args|
+    RepoLogger.writelog('info', "Calculate avgPerRepo method")
+    @execacl_class.avgPerRepo
+  end
+end
+
+desc 'Calculate the average amount of bytes divided by #lang'
+command :avgPerLang do |c|
+  c.desc 'Output file name'
+  c.arg_name 'file_name'
+  c.flag [:f,:filename]
+
+  c.action do |global_options,options,args|
+    RepoLogger.writelog('info', "Calculate avgPerLang method")
+    @execacl_class.avgPerLang
+  end
+end
+
+desc 'Calculate the percentage of each language frequency '
+command :langPerc do |c|
+  c.desc 'Output file name'
+  c.arg_name 'file_name'
+  c.flag [:f,:filename]
+
+  c.action do |global_options,options,args|
+    RepoLogger.writelog('info', "Calculate langPerc method")
+    @execacl_class.langPerc
+  end
+end
+
+desc 'Calculate the percentage of each main language frequency'
+command :mainLangPerc do |c|
+  c.desc 'Output file name'
+  c.arg_name 'file_name'
+  c.flag [:f,:filename]
+
+  c.action do |global_options,options,args|
+    RepoLogger.writelog('info', "Calculate mainLangPerc method")
+    @execacl_class.mainLangPerc
+  end
+end
+
+desc 'Calculate all the statistics'
+command :allStats do |c|
+  c.desc 'Output file name'
+  c.arg_name 'file_name'
+  c.flag [:f,:filename]
+
+  c.action do |global_options,options,args|
+    RepoLogger.writelog('info', "Calculate allStats method")
+    @execacl_class.allStats
+  end
+end
+
+pre do |global,command,options,args|
+
+  org = global[:org]
+  vcs = global[:vcs].downcase.to_sym
+  if RepostatsDefaults.vcshosts.include? vcs
+    # when GITHUB
+    RepoLogger.writelog('info', "Begin for VCS github")
+
+
+
+    # check if org exists
+    cachefile = ActiveSupport::Cache::FileStore.new('tmp/cache', expired_in: 60.minutes)
+    # cachefile.cleanup
+    header = {}
+    header['Accept'] = RepostatsDefaults.vcsoptions[vcs][:media_type]
+    header['Authorization'] = "token #{global[:token]}" unless global[:token].nil? || global[:token].empty?
+    gitCalls = GithubApiCalls.new(RepostatsDefaults.vcsoptions[vcs][:url])
+    parser   = ParseData.new
+    gitCalls.unencoded_connection(header)
+    response = gitCalls.get_organization(org)
+    validate_org_response = parser.parse_org_response(org, response)
+    unless validate_org_response.eql?true
+      RepoLogger.writelog('error', validate_org_response)
+      raise validate_org_response
+    end
+
+    RepoLogger.writelog('info', "Given Organization found")
+
+
+    # get and parse repositories
+    RepoLogger.writelog('info', "Requesting list of Languages")
+
+    gitCalls.establish_connection(header, cachefile)
+    repos_collection = parser.collect_repos(gitCalls, org)
+    lang_coll = parser.collect_languages(repos_collection, gitCalls, vcs)
+    # #
+    # #
+    # lang_coll = {}
+    # lang_coll[:languages_bytes] = JSON.parse('[{"Ruby":20,"HTML":10,"CSS":30},{"Java":60,"Makefile":10},{"Ruby":20,"HTML":10,"JavaScript":50}]')
+    # lang_coll[:main_languages] = ['Ruby', 'Java','Ruby']
+    # lang_coll[:languages] = ['Ruby', 'HTML', 'CSS', 'Java', 'Makefile', 'JavaScript']
+    # lang_coll[:total_bytes] = 200
+    # lang_coll[:total_repos_lang] = 8
+
+
+    filename = global[:filename] || options[:filename]
+    @execacl_class = ExecuteCalculation.new(global[:org], lang_coll, command.name, filename, global[:cons])
+    true
+  else
+    puts 'This version supported only github'
+    false
+  end
+
+end
+
+post do |global,command,options,args|
+  # Post logic here
+  # Use skips_post before a command to skip this
+  # block on that command only
+end
+
+on_error do |exception|
+  # Error logic here
+  # return false to skip default error handling
+  true
+end
+
+exit run(ARGV)
