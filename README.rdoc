@@ -1,6 +1,0 @@
-= repostats
-
-Describe your project here
-
-:include:repostats.rdoc
-
